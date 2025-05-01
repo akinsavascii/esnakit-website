@@ -16,7 +16,7 @@ function App() {
       })
       .catch(error => {
         console.error('Error:', error);
-        setMessage('Welcome to esnakit.com!');
+        setMessage('E-Ticaret Kar Hesaplama Aracına Hoş Geldiniz!');
         setIsLoading(false);
       });
   }, []);
@@ -34,7 +34,7 @@ function App() {
         <BreakevenCalculator />
         
         <div className="coming-soon">
-          <p>More features coming soon!</p>
+          <p>Yakında daha fazla özellik!</p>
         </div>
       </header>
     </div>

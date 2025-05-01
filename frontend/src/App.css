@@ -1,8 +1,9 @@
 .App {
   text-align: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  color: white;
+  background: #f5f1ee;
+  color: #5d4037;
+  font-family: 'Segoe UI', Arial, sans-serif;
 }
 
 .App-logo {
@@ -26,37 +27,22 @@
 }
 
 h1 {
-  font-size: 3rem;
+  font-size: 2.5rem;
   margin-bottom: 1rem;
-  background: linear-gradient(45deg, #00ff87, #60efff);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: gradient 3s ease infinite;
-}
-
-@keyframes gradient {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+  color: #5d4037;
 }
 
 p {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   margin-top: 1rem;
-  color: #ffffff;
+  color: #8d6e63;
 }
 
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #00ff87;
+  border: 4px solid #efebe9;
+  border-top: 4px solid #8d6e63;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 20px auto;
@@ -70,9 +56,10 @@ p {
 .coming-soon {
   margin-top: 2rem;
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  backdrop-filter: blur(5px);
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  border: 1px solid #d7ccc8;
 }
 
 /* Responsive design */
