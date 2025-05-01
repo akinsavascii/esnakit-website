@@ -92,14 +92,30 @@ const BreakevenCalculator: React.FC = () => {
         setLoading(true);
         setResult(null);
         
-        // Seçili platforma göre veri çek
-        const response = await fetch(`http://localhost:5001/api/calculator-data?platform=${values.platform}`);
-        
-        if (!response.ok) {
-          throw new Error('Veriler yüklenemedi');
+        // API çağrısını yeniden etkinleştirelim, ancak hata durumu için fallback ekleyelim
+        let data: CalculatorData;
+        try {
+          // Önce API'den verileri çekmeyi dene
+          const apiUrl = window.location.hostname === 'localhost' 
+            ? `/api/calculator-data?platform=${values.platform}`
+            : `/api/calculator-data?platform=${values.platform}`;
+          
+          const response = await fetch(apiUrl);
+          
+          if (!response.ok) {
+            throw new Error('API yanıt vermedi');
+          }
+          
+          data = await response.json();
+          console.log('API verisi başarıyla çekildi');
+          setError(''); // API çalıştığında hata durumunu temizle
+        } catch (apiError) {
+          console.error('API hatası:', apiError);
+          // API çalışmazsa statik verilere fallback et
+          data = getStaticDataForPlatform(values.platform);
+          setError('Güncel veriler çekilemedi, son bilinen değerler kullanılıyor.');
         }
         
-        const data = await response.json();
         setCalculatorData(data);
         
         // İlk kategoriyi varsayılan olarak ayarla
@@ -121,9 +137,9 @@ const BreakevenCalculator: React.FC = () => {
         
       } catch (err) {
         console.error('Veri çekme hatası:', err);
-        setError('Güncel veriler yüklenemedi. Varsayılan değerler kullanılıyor.');
+        setError('Veriler yüklenirken bir sorun oluştu. Varsayılan değerler kullanılıyor.');
         
-        // Varsayılan verilere geri dön
+        // Hata durumunda varsayılan verileri kullan
         setCalculatorData({
           platforms: [
             { id: 'trendyol', name: 'Trendyol', description: 'Türkiye\'nin önde gelen e-ticaret platformu' },
@@ -339,6 +355,123 @@ const BreakevenCalculator: React.FC = () => {
   const getCalculatorTitle = () => {
     const platform = calculatorData.platforms.find(p => p.id === values.platform);
     return platform ? `${platform.name} Başabaş Fiyat Hesaplayıcı` : 'E-Ticaret Başabaş Fiyat Hesaplayıcı';
+  };
+
+  // Statik veri fonksiyonu
+  const getStaticDataForPlatform = (platform: string): CalculatorData => {
+    // Tüm platformlar için ortak veri
+    const data: CalculatorData = {
+      platforms: [
+        { id: 'trendyol', name: 'Trendyol', description: 'Türkiye\'nin önde gelen e-ticaret platformu' },
+        { id: 'hepsiburada', name: 'Hepsiburada', description: 'Türkiye\'nin önde gelen online alışveriş sitesi' },
+        { id: 'n11', name: 'n11', description: 'Alışverişin uğurlu adresi' },
+        { id: 'amazon', name: 'Amazon TR', description: 'Amazon\'un Türkiye platformu' }
+      ],
+      categories: [],
+      cargoCompanies: {
+        aras: {
+          name: 'Aras Kargo',
+          cargoRates: {
+            1: 17.90, 2: 19.90, 3: 22.90, 4: 25.90, 5: 29.90, 6: 32.90,
+            7: 35.90, 8: 37.90, 9: 39.90, 10: 41.90, 11: 44.90, 12: 47.90,
+          },
+          discountRate: 0.25
+        },
+        yurtici: {
+          name: 'Yurtiçi Kargo',
+          cargoRates: {
+            1: 18.90, 2: 20.90, 3: 23.90, 4: 26.90, 5: 30.90, 6: 33.90,
+            7: 36.90, 8: 38.90, 9: 40.90, 10: 42.90, 11: 45.90, 12: 48.90,
+          },
+          discountRate: 0.25
+        },
+        ptt: {
+          name: 'PTT Kargo',
+          cargoRates: {
+            1: 16.90, 2: 18.90, 3: 21.90, 4: 24.90, 5: 28.90, 6: 31.90,
+            7: 34.90, 8: 36.90, 9: 38.90, 10: 40.90, 11: 43.90, 12: 46.90,
+          },
+          discountRate: 0.20
+        },
+        mng: {
+          name: 'MNG Kargo',
+          cargoRates: {
+            1: 18.50, 2: 20.50, 3: 23.50, 4: 26.50, 5: 30.50, 6: 33.50,
+            7: 36.50, 8: 38.50, 9: 40.50, 10: 42.50, 11: 45.50, 12: 48.50,
+          },
+          discountRate: 0.25
+        }
+      },
+      paymentFeeRate: 0.015,
+      vatRate: 0.18
+    };
+
+    // Platforma göre kategori ve ödeme ücreti oranlarını ayarla
+    switch (platform) {
+      case 'trendyol':
+        data.categories = [
+          { name: 'Elektronik', rate: 0.12 },
+          { name: 'Giyim & Aksesuar', rate: 0.15 },
+          { name: 'Ev & Yaşam', rate: 0.13 },
+          { name: 'Anne & Bebek', rate: 0.14 },
+          { name: 'Kozmetik & Kişisel Bakım', rate: 0.16 },
+          { name: 'Spor & Outdoor', rate: 0.15 },
+          { name: 'Kitap & Hobi', rate: 0.12 },
+          { name: 'Süpermarket & Pet Shop', rate: 0.11 },
+          { name: 'Ayakkabı & Çanta', rate: 0.15 },
+          { name: 'Mücevher & Saat', rate: 0.17 },
+          { name: 'Otomotiv & Motosiklet', rate: 0.12 }
+        ];
+        data.paymentFeeRate = 0.015;
+        break;
+      case 'hepsiburada':
+        data.categories = [
+          { name: 'Elektronik', rate: 0.13 },
+          { name: 'Giyim', rate: 0.16 },
+          { name: 'Ev & Yaşam', rate: 0.14 },
+          { name: 'Kozmetik', rate: 0.17 },
+          { name: 'Kitap & Kırtasiye', rate: 0.11 },
+          { name: 'Oyuncak', rate: 0.15 },
+          { name: 'Spor', rate: 0.14 },
+          { name: 'Otomotiv', rate: 0.12 }
+        ];
+        data.paymentFeeRate = 0.016;
+        break;
+      case 'n11':
+        data.categories = [
+          { name: 'Elektronik', rate: 0.11 },
+          { name: 'Moda', rate: 0.14 },
+          { name: 'Ev & Yaşam', rate: 0.12 },
+          { name: 'Anne & Bebek', rate: 0.13 },
+          { name: 'Kozmetik & Kişisel Bakım', rate: 0.15 },
+          { name: 'Kitap & Film & Müzik', rate: 0.10 },
+          { name: 'Spor & Outdoor', rate: 0.13 },
+          { name: 'Otomotiv & Motosiklet', rate: 0.11 }
+        ];
+        data.paymentFeeRate = 0.014;
+        break;
+      case 'amazon':
+        data.categories = [
+          { name: 'Elektronik', rate: 0.09 },
+          { name: 'Kitaplar', rate: 0.15 },
+          { name: 'Mutfak', rate: 0.12 },
+          { name: 'Spor', rate: 0.12 },
+          { name: 'Oyuncak', rate: 0.10 },
+          { name: 'Bahçe', rate: 0.11 },
+          { name: 'Giyim & Aksesuar', rate: 0.13 },
+          { name: 'Güzellik & Kişisel Bakım', rate: 0.12 }
+        ];
+        data.paymentFeeRate = 0.017;
+        break;
+      default:
+        data.categories = [
+          { name: 'Elektronik', rate: 0.12 },
+          { name: 'Giyim & Aksesuar', rate: 0.15 },
+          { name: 'Ev & Yaşam', rate: 0.13 }
+        ];
+    }
+
+    return data;
   };
 
   if (loading) {

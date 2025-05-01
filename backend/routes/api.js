@@ -2,10 +2,23 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const cheerio = require('cheerio');
+const fs = require('fs');
+const path = require('path');
+
+// Son güncellenme tarihini tutacak değişken
+let lastUpdated = new Date();
+
+// Yedek veri dosyası yolu
+const BACKUP_DATA_FILE = path.join(__dirname, '../data/cached-data.json');
+
+// Veri dizinini oluştur (yoksa)
+if (!fs.existsSync(path.join(__dirname, '../data'))) {
+  fs.mkdirSync(path.join(__dirname, '../data'), { recursive: true });
+}
 
 // Ana API test endpoint'i
 router.get('/', (req, res) => {
-  res.json({ message: 'API çalışıyor!' });
+  res.json({ message: 'API çalışıyor!', lastUpdated: lastUpdated.toISOString() });
 });
 
 // Hesaplayıcı verileri için endpoint
@@ -22,66 +35,226 @@ router.get('/calculator-data', async (req, res) => {
       { id: 'amazon', name: 'Amazon TR', description: 'Amazon\'un Türkiye platformu' }
     ];
     
-    // Kargo şirketleri bilgisini API'den çek
-    const cargoCompanies = await scrapeCargoRates();
+    let calculatorData;
     
-    // Platforma özgü veri
-    let categories = [];
-    let paymentFeeRate = 0.015;
-    let vatRate = 0.18;
-    
-    // İlgili platformun verilerini çek
-    switch (platform) {
-      case 'trendyol':
-        // Trendyol için veri çek (web scraping)
-        categories = await scrapeTrendyolCommissionRates();
-        paymentFeeRate = 0.015;
-        break;
-        
-      case 'hepsiburada':
-        // Hepsiburada için veri çek (web scraping)
-        categories = await scrapeHepsiburadaCommissionRates();
-        paymentFeeRate = 0.016;
-        break;
-        
-      case 'n11':
-        // n11 için veri çek (web scraping)
-        categories = await scrapeN11CommissionRates();
-        paymentFeeRate = 0.014;
-        break;
-        
-      case 'amazon':
-        // Amazon TR için veri çek (web scraping)
-        categories = await scrapeAmazonCommissionRates();
-        paymentFeeRate = 0.017;
-        break;
-        
-      default:
-        // Varsayılan olarak Trendyol verilerini kullan
-        categories = await scrapeTrendyolCommissionRates();
-        paymentFeeRate = 0.015;
+    try {
+      // Kargo şirketleri bilgisini API'den çek
+      const cargoCompanies = await scrapeCargoRates();
+      
+      // Platforma özgü veri
+      let categories = [];
+      let paymentFeeRate = 0.015;
+      let vatRate = 0.18;
+      
+      // İlgili platformun verilerini çek
+      switch (platform) {
+        case 'trendyol':
+          // Trendyol için veri çek (web scraping)
+          categories = await scrapeTrendyolCommissionRates();
+          paymentFeeRate = 0.015;
+          break;
+          
+        case 'hepsiburada':
+          // Hepsiburada için veri çek (web scraping)
+          categories = await scrapeHepsiburadaCommissionRates();
+          paymentFeeRate = 0.016;
+          break;
+          
+        case 'n11':
+          // n11 için veri çek (web scraping)
+          categories = await scrapeN11CommissionRates();
+          paymentFeeRate = 0.014;
+          break;
+          
+        case 'amazon':
+          // Amazon TR için veri çek (web scraping)
+          categories = await scrapeAmazonCommissionRates();
+          paymentFeeRate = 0.017;
+          break;
+          
+        default:
+          // Varsayılan olarak Trendyol verilerini kullan
+          categories = await scrapeTrendyolCommissionRates();
+          paymentFeeRate = 0.015;
+      }
+      
+      // Tüm verileri birleştir
+      calculatorData = {
+        platforms,
+        categories,
+        cargoCompanies,
+        paymentFeeRate,
+        vatRate,
+        lastUpdated: lastUpdated.toISOString()
+      };
+      
+      // Verileri önbelleğe kaydet (API çalışmazsa kullanmak için)
+      saveBackupData(calculatorData);
+      
+      // Güncel verileri logla
+      console.log(`[${new Date().toISOString()}] ${platform} için veriler çekildi`);
+      console.log(`- ${categories.length} kategori`);
+      console.log(`- ${Object.keys(cargoCompanies).length} kargo şirketi`);
+    } catch (scrapingError) {
+      console.error('Scraping hatası:', scrapingError);
+      
+      // Hata durumunda yedek verileri kullan
+      console.log('Yedek veriler kullanılıyor...');
+      calculatorData = loadBackupData(platform);
+      
+      if (!calculatorData) {
+        // Yedek veriler yoksa varsayılan veri oluştur
+        calculatorData = getDefaultData(platform);
+      }
     }
-    
-    // Tüm verileri birleştir
-    const calculatorData = {
-      platforms,
-      categories,
-      cargoCompanies,
-      paymentFeeRate,
-      vatRate
-    };
-    
-    // Güncel verileri logla
-    console.log(`[${new Date().toISOString()}] ${platform} için veriler çekildi`);
-    console.log(`- ${categories.length} kategori`);
-    console.log(`- ${Object.keys(cargoCompanies).length} kargo şirketi`);
     
     res.json(calculatorData);
   } catch (error) {
     console.error('API hatası:', error);
-    res.status(500).json({ error: 'Veriler alınamadı. Lütfen daha sonra tekrar deneyin.' });
+    // Hata durumunda varsayılan veriyi döndür
+    const defaultData = getDefaultData(req.query.platform || 'trendyol');
+    res.json(defaultData);
   }
 });
+
+// Yedek verileri kaydetme fonksiyonu
+function saveBackupData(data) {
+  try {
+    lastUpdated = new Date();
+    data.lastUpdated = lastUpdated.toISOString();
+    fs.writeFileSync(BACKUP_DATA_FILE, JSON.stringify(data, null, 2));
+    console.log(`Yedek veriler kaydedildi: ${BACKUP_DATA_FILE}`);
+  } catch (err) {
+    console.error('Yedek veri kaydetme hatası:', err);
+  }
+}
+
+// Yedek verileri yükleme fonksiyonu
+function loadBackupData(platform) {
+  try {
+    if (fs.existsSync(BACKUP_DATA_FILE)) {
+      const data = JSON.parse(fs.readFileSync(BACKUP_DATA_FILE, 'utf8'));
+      console.log(`Yedek veriler yüklendi (son güncelleme: ${data.lastUpdated || 'bilinmiyor'})`);
+      return data;
+    }
+  } catch (err) {
+    console.error('Yedek veri okuma hatası:', err);
+  }
+  return null;
+}
+
+// Varsayılan veri fonksiyonu
+function getDefaultData(platform) {
+  const vatRate = 0.18;
+  let categories = [];
+  let paymentFeeRate = 0.015;
+  
+  switch (platform) {
+    case 'trendyol':
+      categories = [
+        { name: 'Elektronik', rate: 0.12 },
+        { name: 'Giyim & Aksesuar', rate: 0.15 },
+        { name: 'Ev & Yaşam', rate: 0.13 },
+        { name: 'Anne & Bebek', rate: 0.14 },
+        { name: 'Kozmetik & Kişisel Bakım', rate: 0.16 },
+        { name: 'Spor & Outdoor', rate: 0.15 },
+        { name: 'Kitap & Hobi', rate: 0.12 },
+        { name: 'Süpermarket & Pet Shop', rate: 0.11 },
+        { name: 'Ayakkabı & Çanta', rate: 0.15 },
+        { name: 'Mücevher & Saat', rate: 0.17 },
+        { name: 'Otomotiv & Motosiklet', rate: 0.12 }
+      ];
+      paymentFeeRate = 0.015;
+      break;
+    case 'hepsiburada':
+      categories = [
+        { name: 'Elektronik', rate: 0.13 },
+        { name: 'Giyim', rate: 0.16 },
+        { name: 'Ev & Yaşam', rate: 0.14 },
+        { name: 'Kozmetik', rate: 0.17 },
+        { name: 'Kitap & Kırtasiye', rate: 0.11 },
+        { name: 'Oyuncak', rate: 0.15 },
+        { name: 'Spor', rate: 0.14 },
+        { name: 'Otomotiv', rate: 0.12 }
+      ];
+      paymentFeeRate = 0.016;
+      break;
+    case 'n11':
+      categories = [
+        { name: 'Elektronik', rate: 0.11 },
+        { name: 'Moda', rate: 0.14 },
+        { name: 'Ev & Yaşam', rate: 0.12 },
+        { name: 'Anne & Bebek', rate: 0.13 },
+        { name: 'Kozmetik & Kişisel Bakım', rate: 0.15 },
+        { name: 'Kitap & Film & Müzik', rate: 0.10 },
+        { name: 'Spor & Outdoor', rate: 0.13 },
+        { name: 'Otomotiv & Motosiklet', rate: 0.11 }
+      ];
+      paymentFeeRate = 0.014;
+      break;
+    case 'amazon':
+      categories = [
+        { name: 'Elektronik', rate: 0.09 },
+        { name: 'Kitaplar', rate: 0.15 },
+        { name: 'Mutfak', rate: 0.12 },
+        { name: 'Spor', rate: 0.12 },
+        { name: 'Oyuncak', rate: 0.10 },
+        { name: 'Bahçe', rate: 0.11 },
+        { name: 'Giyim & Aksesuar', rate: 0.13 },
+        { name: 'Güzellik & Kişisel Bakım', rate: 0.12 }
+      ];
+      paymentFeeRate = 0.017;
+      break;
+  }
+  
+  return {
+    platforms: [
+      { id: 'trendyol', name: 'Trendyol', description: 'Türkiye\'nin önde gelen e-ticaret platformu' },
+      { id: 'hepsiburada', name: 'Hepsiburada', description: 'Türkiye\'nin önde gelen online alışveriş sitesi' },
+      { id: 'n11', name: 'n11', description: 'Alışverişin uğurlu adresi' },
+      { id: 'amazon', name: 'Amazon TR', description: 'Amazon\'un Türkiye platformu' }
+    ],
+    categories,
+    cargoCompanies: {
+      aras: {
+        name: 'Aras Kargo',
+        cargoRates: {
+          1: 17.90, 2: 19.90, 3: 22.90, 4: 25.90, 5: 29.90, 6: 32.90,
+          7: 35.90, 8: 37.90, 9: 39.90, 10: 41.90, 11: 44.90, 12: 47.90,
+        },
+        discountRate: 0.25
+      },
+      yurtici: {
+        name: 'Yurtiçi Kargo',
+        cargoRates: {
+          1: 18.90, 2: 20.90, 3: 23.90, 4: 26.90, 5: 30.90, 6: 33.90,
+          7: 36.90, 8: 38.90, 9: 40.90, 10: 42.90, 11: 45.90, 12: 48.90,
+        },
+        discountRate: 0.25
+      },
+      ptt: {
+        name: 'PTT Kargo',
+        cargoRates: {
+          1: 16.90, 2: 18.90, 3: 21.90, 4: 24.90, 5: 28.90, 6: 31.90,
+          7: 34.90, 8: 36.90, 9: 38.90, 10: 40.90, 11: 43.90, 12: 46.90,
+        },
+        discountRate: 0.20
+      },
+      mng: {
+        name: 'MNG Kargo',
+        cargoRates: {
+          1: 18.50, 2: 20.50, 3: 23.50, 4: 26.50, 5: 30.50, 6: 33.50,
+          7: 36.50, 8: 38.50, 9: 40.50, 10: 42.50, 11: 45.50, 12: 48.50,
+        },
+        discountRate: 0.25
+      }
+    },
+    paymentFeeRate,
+    vatRate,
+    lastUpdated: new Date().toISOString(),
+    isDefault: true // Bu bir varsayılan veridir
+  };
+}
 
 // Platform bazlı scraping fonksiyonları
 async function scrapeTrendyolCommissionRates() {
