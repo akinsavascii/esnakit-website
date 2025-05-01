@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import BreakevenCalculator from './components/BreakevenCalculator';
 
 function App() {
   const [message, setMessage] = useState<string>('Loading...');
@@ -29,6 +30,9 @@ function App() {
         ) : (
           <p>{message}</p>
         )}
+        
+        <BreakevenCalculator />
+        
         <div className="coming-soon">
           <p>More features coming soon!</p>
         </div>
